@@ -31,6 +31,9 @@ The consumer must pin and verify the committed submodule identity before
 compilation. It must also audit its final add-on JAR so the two shared classes
 are present once and no standalone runtime JAR is nested.
 
+The first three consumer migrations and their acceptance gates are recorded in
+the [pilot contract](docs/PILOT.md).
+
 ## Build
 
 Use Java 21 and either Gradle 9.4.0 or 9.6.1. The repository deliberately has
