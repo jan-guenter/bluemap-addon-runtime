@@ -1,0 +1,49 @@
+{
+  "schema": 1,
+  "component": "bluemap-addon-runtime",
+  "version": "0.1.0-alpha.1",
+  "origin": {
+    "repository": "https://github.com/jan-guenter/bluemap-laserio-addon",
+    "commit": "f44e3ff20e0a4ad3b9b5dfb41e3db1d2a14a3152",
+    "commit_subject": "Bootstrap LaserIO BlueMap add-on",
+    "license": "MIT",
+    "tag_containing_origin": "v0.1.0-alpha.1"
+  },
+  "portfolio_origin_evidence": {
+    "artifact_pin": {
+      "package_normalized_sha256": "56cc5f013f3a6156201c2b1768db05a72770e64f8435f4beb5c5cbd372aa60b3",
+      "matching_current_copies": 24,
+      "earliest_matching_history_commit": "f44e3ff20e0a4ad3b9b5dfb41e3db1d2a14a3152"
+    },
+    "exact_artifact_detector": {
+      "package_normalized_sha256": "72b43116b4b90222fd1b38b5444165c8abde96cbfd6a0c0b1c52c25d1a7c0c8b",
+      "matching_current_copies": 15,
+      "earliest_matching_history_commit": "f44e3ff20e0a4ad3b9b5dfb41e3db1d2a14a3152"
+    },
+    "exact_artifact_detector_test": {
+      "package_normalized_sha256": "28c37b4f4d2ee4d25861a80cd849213abd815418aceb5f296fa201b5344210fb",
+      "matching_current_copies": 21,
+      "earliest_matching_history_commit": "f44e3ff20e0a4ad3b9b5dfb41e3db1d2a14a3152"
+    }
+  },
+  "transformation": "Production sources change only the package declaration from io.github.janguenter.bluemap.laserio.profile to io.github.janguenter.bluemap.addon.runtime.artifact.",
+  "sources": [
+    {
+      "origin_path": "src/main/java/io/github/janguenter/bluemap/laserio/profile/ArtifactPin.java",
+      "production_path": "src/main/java/io/github/janguenter/bluemap/addon/runtime/artifact/ArtifactPin.java",
+      "oracle_path": "src/test/java/io/github/janguenter/bluemap/laserio/profile/ArtifactPin.java",
+      "sha256": "61e813ba16b33cecccf7a3d8cc4b344a1f5f5670ee5d79c39179211de74d1972"
+    },
+    {
+      "origin_path": "src/main/java/io/github/janguenter/bluemap/laserio/profile/ExactArtifactDetector.java",
+      "production_path": "src/main/java/io/github/janguenter/bluemap/addon/runtime/artifact/ExactArtifactDetector.java",
+      "oracle_path": "src/test/java/io/github/janguenter/bluemap/laserio/profile/ExactArtifactDetector.java",
+      "sha256": "f8411956562e908cba8200c43d5a24b9ea4f626eaf515b432c188e9adeaccb84"
+    }
+  ],
+  "origin_test": {
+    "origin_path": "src/test/java/io/github/janguenter/bluemap/laserio/profile/ExactArtifactDetectorTest.java",
+    "sha256": "4437a222a3bbcc7e21e5eca828a50ad8d1a0ab7ca6d7c797428e197d49bdfd56",
+    "use": "The two original cases are preserved in the neutral contract test and extended with differential cases."
+  }
+}

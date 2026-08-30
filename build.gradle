@@ -1,0 +1,252 @@
+// SPDX-License-Identifier: MIT
+
+import groovy.json.JsonSlurper
+import groovy.xml.XmlSlurper
+import org.gradle.api.file.CopySpec
+
+plugins {
+    id 'java-library'
+    id 'checkstyle'
+    id 'maven-publish'
+}
+
+group = runtime_group
+version = runtime_version
+
+base {
+    archivesName = artifact_id
+}
+
+java {
+    toolchain.languageVersion = JavaLanguageVersion.of(21)
+    withSourcesJar()
+}
+
+dependencies {
+    testImplementation platform('org.junit:junit-bom:5.11.4')
+    testImplementation 'org.junit.jupiter:junit-jupiter'
+    testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+}
+
+tasks.withType(JavaCompile).configureEach {
+    options.encoding = 'UTF-8'
+    options.release = 21
+    options.compilerArgs.addAll(['-Xlint:all', '-Werror'])
+}
+
+tasks.withType(AbstractArchiveTask).configureEach {
+    preserveFileTimestamps = false
+    reproducibleFileOrder = true
+}
+
+tasks.withType(Test).configureEach {
+    useJUnitPlatform()
+}
+
+checkstyle {
+    toolVersion = '10.18.2'
+    configFile = file('config/checkstyle/checkstyle.xml')
+}
+
+tasks.withType(Checkstyle).configureEach {
+    reports {
+        xml.required = true
+        html.required = true
+    }
+}
+
+def archiveMetadata = { CopySpec spec ->
+    spec.from('LICENSE') {
+        into 'META-INF'
+        rename { 'LICENSE-bluemap-addon-runtime' }
+    }
+    spec.from('NOTICE.md') {
+        into 'META-INF'
+        rename { 'NOTICE-bluemap-addon-runtime.md' }
+    }
+    spec.from('provenance/origins.json') {
+        into 'META-INF/bluemap-addon-runtime'
+    }
+}
+
+tasks.named('jar', Jar).configure {
+    includeEmptyDirs = false
+    manifest {
+        attributes(
+                'Implementation-Title': 'BlueMap Add-on Runtime',
+                'Implementation-Version': project.version.toString()
+        )
+    }
+    archiveMetadata(delegate)
+}
+
+tasks.named('sourcesJar', Jar).configure {
+    includeEmptyDirs = false
+    archiveMetadata(delegate)
+}
+
+def binaryJar = tasks.named('jar', Jar).flatMap { it.archiveFile }
+def sourceJar = tasks.named('sourcesJar', Jar).flatMap { it.archiveFile }
+
+tasks.register('verifyOriginSources') {
+    inputs.files(
+            'provenance/origins.json',
+            'src/main/java/io/github/janguenter/bluemap/addon/runtime/artifact/ArtifactPin.java',
+            'src/main/java/io/github/janguenter/bluemap/addon/runtime/artifact/ExactArtifactDetector.java',
+            'src/test/java/io/github/janguenter/bluemap/laserio/profile/ArtifactPin.java',
+            'src/test/java/io/github/janguenter/bluemap/laserio/profile/ExactArtifactDetector.java'
+    )
+    doLast {
+        def provenance = new JsonSlurper().parse(file('provenance/origins.json'))
+        def neutralPackage = 'package io.github.janguenter.bluemap.addon.runtime.artifact;'
+        def originPackage = 'package io.github.janguenter.bluemap.laserio.profile;'
+        provenance.sources.each { source ->
+            def oracle = file(source.oracle_path)
+            def production = file(source.production_path)
+            def oracleHash = java.security.MessageDigest.getInstance('SHA-256')
+                    .digest(oracle.bytes).encodeHex().toString()
+            def normalized = production.getText('UTF-8')
+                    .replace(neutralPackage, originPackage)
+                    .getBytes('UTF-8')
+            def productionHash = java.security.MessageDigest.getInstance('SHA-256')
+                    .digest(normalized).encodeHex().toString()
+            if (oracleHash != source.sha256 || productionHash != source.sha256) {
+                throw new GradleException(
+                        "Origin mismatch for ${source.origin_path}: "
+                                + "oracle=${oracleHash}, normalized=${productionHash}"
+                )
+            }
+        }
+    }
+}
+
+tasks.register('verifyRuntimeJar') {
+    dependsOn tasks.named('jar')
+    inputs.file(binaryJar)
+    doLast {
+        def expected = [
+                'META-INF/MANIFEST.MF',
+                'META-INF/LICENSE-bluemap-addon-runtime',
+                'META-INF/NOTICE-bluemap-addon-runtime.md',
+                'META-INF/bluemap-addon-runtime/origins.json',
+                'io/github/janguenter/bluemap/addon/runtime/artifact/ArtifactPin.class',
+                'io/github/janguenter/bluemap/addon/runtime/artifact/ExactArtifactDetector.class',
+                'io/github/janguenter/bluemap/addon/runtime/artifact/ExactArtifactDetector$LexedLine.class',
+                'io/github/janguenter/bluemap/addon/runtime/artifact/ExactArtifactDetector$QuoteMode.class'
+        ] as Set
+        def zip = new java.util.zip.ZipFile(inputs.files.singleFile)
+        try {
+            def entries = zip.entries().findAll { !it.directory }.collect { it.name }
+            if (entries.toSet().size() != entries.size() || entries.toSet() != expected) {
+                throw new GradleException("Runtime JAR boundary mismatch: ${entries}")
+            }
+        } finally {
+            zip.close()
+        }
+    }
+}
+
+tasks.register('verifyRuntimeSourcesJar') {
+    dependsOn tasks.named('sourcesJar')
+    inputs.file(sourceJar)
+    doLast {
+        def expected = [
+                'META-INF/MANIFEST.MF',
+                'META-INF/LICENSE-bluemap-addon-runtime',
+                'META-INF/NOTICE-bluemap-addon-runtime.md',
+                'META-INF/bluemap-addon-runtime/origins.json',
+                'io/github/janguenter/bluemap/addon/runtime/artifact/ArtifactPin.java',
+                'io/github/janguenter/bluemap/addon/runtime/artifact/ExactArtifactDetector.java'
+        ] as Set
+        def zip = new java.util.zip.ZipFile(inputs.files.singleFile)
+        try {
+            def entries = zip.entries().findAll { !it.directory }.collect { it.name }
+            if (entries.toSet().size() != entries.size() || entries.toSet() != expected) {
+                throw new GradleException("Sources JAR boundary mismatch: ${entries}")
+            }
+        } finally {
+            zip.close()
+        }
+    }
+}
+
+publishing {
+    publications {
+        runtime(MavenPublication) {
+            from components.java
+            artifactId = artifact_id
+            pom {
+                name = 'BlueMap Add-on Runtime'
+                description = 'Source-bundled runtime contracts for independent BlueMap add-ons.'
+                url = 'https://github.com/jan-guenter/bluemap-addon-runtime'
+                licenses {
+                    license {
+                        name = 'MIT License'
+                        url = 'https://opensource.org/license/mit'
+                        distribution = 'repo'
+                    }
+                }
+                developers {
+                    developer {
+                        id = 'jan-guenter'
+                        name = 'Jan Guenter'
+                    }
+                }
+                scm {
+                    connection = 'scm:git:https://github.com/jan-guenter/bluemap-addon-runtime.git'
+                    developerConnection = 'scm:git:ssh://git@github.com/jan-guenter/bluemap-addon-runtime.git'
+                    url = 'https://github.com/jan-guenter/bluemap-addon-runtime'
+                }
+            }
+        }
+    }
+    repositories {
+        maven {
+            name = 'GitHubPackages'
+            url = uri('https://maven.pkg.github.com/jan-guenter/bluemap-addon-runtime')
+            credentials {
+                username = System.getenv('GITHUB_ACTOR')
+                password = System.getenv('GITHUB_TOKEN')
+            }
+        }
+    }
+}
+
+tasks.register('verifyPublication') {
+    dependsOn tasks.named('generatePomFileForRuntimePublication')
+    dependsOn tasks.named('generateMetadataFileForRuntimePublication')
+    inputs.files(
+            layout.buildDirectory.file('publications/runtime/pom-default.xml'),
+            layout.buildDirectory.file('publications/runtime/module.json')
+    )
+    doLast {
+        def pom = new XmlSlurper(false, false).parse(
+                layout.buildDirectory.file('publications/runtime/pom-default.xml').get().asFile
+        )
+        if (pom.groupId.text() != project.group.toString()
+                || pom.artifactId.text() != artifact_id
+                || pom.version.text() != project.version.toString()
+                || pom.dependencies.dependency.size() != 0) {
+            throw new GradleException('POM identity or dependency boundary mismatch')
+        }
+
+        def metadata = new JsonSlurper().parse(
+                layout.buildDirectory.file('publications/runtime/module.json').get().asFile
+        )
+        if (metadata.component.group != project.group.toString()
+                || metadata.component.module != artifact_id
+                || metadata.component.version != project.version.toString()
+                || metadata.variants.any {
+                    (it.dependencies ?: []).size() != 0
+                            || (it.dependencyConstraints ?: []).size() != 0
+                }) {
+            throw new GradleException('Gradle module identity or dependency boundary mismatch')
+        }
+    }
+}
+
+tasks.named('check').configure {
+    dependsOn tasks.named('verifyOriginSources')
+    dependsOn tasks.named('verifyRuntimeJar')
+    dependsOn tasks.named('verifyRuntimeSourcesJar')
+}
